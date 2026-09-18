@@ -140,6 +140,43 @@ powershell.exe -ExecutionPolicy Bypass -File ".\file-audit-selector-v1.ps1" `
 
 The main outputs are `sample-plan.csv`, `sample-summary.txt`, `oversize-candidates.csv`, `intervention-window.csv`, `after-intervention-review.csv`, and `zero-byte-candidates.csv`.
 
+
+### V1.1 stratified recovery sample
+
+`file-audit-selector-v1.1.ps1` replaces the broad V1 time buckets with mutually exclusive strata measured backwards from the documented failure event:
+
+`1 day`, `3 days`, `1 week`, `2 weeks`, `3 weeks`, `1 month`, `6 weeks`, `2 months`, `3 months`, `6 months`, `1 year`, `2 years`, `3 years`, and `5 years`.
+
+Calendar-month and year boundaries use PowerShell date arithmetic rather than fixed 30/365-day approximations. Files older than five years are written to a separate review CSV and are not automatically selected.
+
+Within every time stratum, native creative/project files are prioritized first:
+
+- `.psd`, `.ai`, `.indd`, `.aup3`
+- Office authoring files follow: `.docx`, `.xlsx`, `.xls`, `.doc`, `.pptx`, `.rtf`
+- media, PDF, data/code, text/markup, and archives follow in that order
+
+Desktop files are preferred within each type group. Selection is no longer biased toward the smallest files. Each time stratum receives a nominal byte budget, each type group receives a reserved share inside that stratum, and unused capacity is filled in priority order. Unused capacity rolls forward to older time strata.
+
+The default per-stratum type shares are:
+
+```text
+CREATIVE_NATIVE   35%
+OFFICE_AUTHORING  25%
+MEDIA             18%
+PDF               10%
+DATA_CODE          7%
+TEXT_MARKUP        4%
+ARCHIVE            1%
+```
+
+The total default plan remains capped at 3.9 billion bytes. V1.1 is still planning-only and does not copy source files.
+
+Example:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File ".\file-audit-selector-v1.1.ps1" -InventoryCsv ".\file-inventator-v1_master.csv" -SourceRoot "X:\" -ExpectedSerial "<SERIAL_NUMBER>" -UserRoot "X:\Users\PROFILE\" -FirstDocumentedFailureTime "2026-07-26 20:32:24" -InterventionEndTime "2026-07-27 04:00:00" -PlannedSampleFolderName "!AnalyseSampleRecovery"
+```
+
 ## Excel note
 
 A single Excel worksheet can display at most 1,048,576 rows. The CSV can contain more rows; use PowerShell, Python, a database, or split analysis files when the inventory is larger.
