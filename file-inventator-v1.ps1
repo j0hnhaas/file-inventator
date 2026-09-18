@@ -50,7 +50,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName = 'file-inventator-v1'
-$ScriptVersion = '1.0'
+$ScriptVersion = '1.0.1'
 $RunStarted = Get-Date
 $RunID = $RunStarted.ToString('yyyyMMdd_HHmmss')
 
@@ -109,10 +109,20 @@ function Quote-Arg([string]$Value) {
   return $Value
 }
 
-function Start-Robo([string[]]$Args) {
+function Start-Robo([string[]]$RoboArguments) {
   $exe = Join-Path $env:SystemRoot 'System32\robocopy.exe'
   if (-not (Test-Path -LiteralPath $exe)) { throw "Robocopy not found: $exe" }
-  $line = (($Args | ForEach-Object { Quote-Arg $_ }) -join ' ')
+
+  if ($null -eq $RoboArguments -or $RoboArguments.Count -eq 0) {
+    throw 'Internal error: no Robocopy arguments were supplied.'
+  }
+
+  $line = (($RoboArguments | ForEach-Object { Quote-Arg $_ }) -join ' ')
+
+  if ([string]::IsNullOrWhiteSpace($line)) {
+    throw 'Internal error: Robocopy argument line is empty.'
+  }
+
   return Start-Process -FilePath $exe -ArgumentList $line -NoNewWindow -PassThru
 }
 
