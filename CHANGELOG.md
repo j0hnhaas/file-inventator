@@ -4,6 +4,8 @@ This file records the development history of Recovery Audit Toolkit. The active 
 
 ## Unreleased — Recovery Audit Toolkit
 
+- Added `recovery-audit-validator.ps1`, a heuristic mounted-ISO validator that checks the approved plan against the read-only ISO, verifies presence and exact size, samples BOF/25%/50%/75%/EOF, checks magic bytes, applies dependency-free format-specific structure tests where available, and writes full/review/summary reports with progress.
+
 - Updated `recovery-audit-iso.ps1` to instantiate a CLR `IStreamReader` and call its typed `Read(byte[])` method directly, avoiding PowerShell reflection wrapping the byte buffer as `PSObject` during ISO streaming.
 
 - Updated `recovery-audit-iso.ps1` to bridge the IMAPI `ImageStream` through a tiny CLR helper before chunked writing. This avoids PowerShell's inability to directly cast the `System.__ComObject` wrapper to `ComTypes.IStream` while preserving the progress display.
