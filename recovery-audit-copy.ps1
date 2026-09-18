@@ -316,12 +316,15 @@ if([UInt64]$drive.Free -lt $requiredFree){
 $ManifestPath=Join-Path $DestinationRoot 'copy-manifest.csv'
 $SummaryPath=Join-Path $DestinationRoot 'copy-summary.txt'
 $InProgressPath=Join-Path $DestinationRoot 'COPY_IN_PROGRESS.txt'
+$PlanCopyPath=Join-Path $DestinationRoot 'approved-sample-plan.csv'
 
-foreach($reserved in @($ManifestPath,$SummaryPath,$InProgressPath)){
+foreach($reserved in @($ManifestPath,$SummaryPath,$InProgressPath,$PlanCopyPath)){
   if($destSet.Contains($reserved)){
     throw "PRECHECK ABORT: planned sample collides with toolkit metadata path: $reserved"
   }
 }
+
+[System.IO.File]::Copy($SamplePlan,$PlanCopyPath,$false)
 
 @(
   'RECOVERY AUDIT COPY IN PROGRESS'
@@ -376,8 +379,6 @@ try{
       if($copiedSize -ne [UInt64]$r.SizeBytes){
         throw "SIZE_MISMATCH expected=$($r.SizeBytes) actual=$copiedSize"
       }
-
-      [System.IO.File]::SetLastWriteTime($r.DestinationPath,$r.LastWriteTime)
 
       $CopiedFiles++
       $CopiedBytes+=$copiedSize
@@ -488,6 +489,7 @@ $summary=@(
   "FailedFiles=$FailedFiles"
   "FailedBytes=$FailedBytes"
   "Manifest=$ManifestPath"
+  "ApprovedPlanCopy=$PlanCopyPath"
   "SourceHashesCalculated=False"
   "OverwriteAllowed=False"
   "AbortMessage=$abortMessage"
