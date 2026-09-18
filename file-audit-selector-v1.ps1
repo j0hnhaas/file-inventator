@@ -40,12 +40,12 @@ param(
   [Parameter()][UInt64]$MaxSampleBytes=3900000000,
   [Parameter()][UInt64]$OversizeThresholdBytes=500000000,
   [Parameter()][int]$HistoricalStartYear=2020,
+  [Parameter()][string]$PlannedSampleFolderName='!AnalyseSampleRecovery',
   [Parameter()][switch]$IncludeNoisePaths
 )
 
 $ErrorActionPreference='Stop'
 $ScriptVersion='1.0'
-$SampleFolderName='!AnalyseSampleAttingoRecovery'
 $RunID=(Get-Date).ToString('yyyyMMdd_HHmmss')
 Add-Type -AssemblyName Microsoft.VisualBasic
 
@@ -324,7 +324,7 @@ try{
       $byExtension[$ek]++
       $reason=$r.TimeBand+'; '+$r.FileTypeGroup
       if($r.IsDesktop -eq 'True'){$reason+='; Desktop'}
-      $line=@(([string]$selectedFiles),(Csv $r.FileID),(Csv $r.SourceID),(Csv $r.FullPath),(Csv $r.RelativePath),(Csv $r.Extension),([string]$size),(Csv $r.LastWriteTime),(Csv $r.FileTypeGroup),(Csv $r.TimeBand),(Csv $r.IsDesktop),(Csv $bucket),(Csv $SampleFolderName),(Csv $reason)) -join ';'
+      $line=@(([string]$selectedFiles),(Csv $r.FileID),(Csv $r.SourceID),(Csv $r.FullPath),(Csv $r.RelativePath),(Csv $r.Extension),([string]$size),(Csv $r.LastWriteTime),(Csv $r.FileTypeGroup),(Csv $r.TimeBand),(Csv $r.IsDesktop),(Csv $bucket),(Csv $PlannedSampleFolderName),(Csv $reason)) -join ';'
       $plan.WriteLine($line)
     }
 
@@ -355,7 +355,7 @@ $summary.Add("FirstDocumentedFailureTime=$($FirstDocumentedFailureTime.ToString(
 $summary.Add("InterventionEndTime=$($InterventionEndTime.ToString('yyyy-MM-dd HH:mm:ss'))")
 $summary.Add("HistoricalStartYear=$HistoricalStartYear")
 $summary.Add("MaxSampleBytes=$MaxSampleBytes")
-$summary.Add("PlannedSampleFolder=$SampleFolderName")
+$summary.Add("PlannedSampleFolder=$PlannedSampleFolderName")
 $summary.Add("RowsRead=$rowsRead")
 $summary.Add("RelevantRows=$relevant")
 $summary.Add("NoiseRowsSkipped=$noiseSkipped")
