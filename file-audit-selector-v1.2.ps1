@@ -196,12 +196,13 @@ function Select-RowsWithinBudget {
     $used+=$size
     $count++
 
-    if(-not $script:SelectedByTimeBand.ContainsKey($Band)){
-      $script:SelectedByTimeBand[$Band]=[UInt64]0
-      $script:SelectedBytesByTimeBand[$Band]=[UInt64]0
+    $actualBand=$r.TimeBand
+    if(-not $script:SelectedByTimeBand.ContainsKey($actualBand)){
+      $script:SelectedByTimeBand[$actualBand]=[UInt64]0
+      $script:SelectedBytesByTimeBand[$actualBand]=[UInt64]0
     }
-    $script:SelectedByTimeBand[$Band]++
-    $script:SelectedBytesByTimeBand[$Band]+=$size
+    $script:SelectedByTimeBand[$actualBand]++
+    $script:SelectedBytesByTimeBand[$actualBand]+=$size
 
     if(-not $script:SelectedByTypeGroup.ContainsKey($r.TypeGroup)){
       $script:SelectedByTypeGroup[$r.TypeGroup]=[UInt64]0
@@ -226,7 +227,7 @@ function Select-RowsWithinBudget {
       $script:SelectedOtherBytes+=$size
     }
 
-    $reason=$Band+'; '+$r.TypeGroup
+    $reason=$actualBand+'; '+$r.TypeGroup
     if($r.IsDesktop -eq 'True'){$reason+='; Desktop'}
 
     $line=@(
@@ -239,7 +240,7 @@ function Select-RowsWithinBudget {
       ([string]$size),
       (Csv $r.LastWriteTime),
       (Csv $r.TypeGroup),
-      (Csv $Band),
+      (Csv $actualBand),
       (Csv $r.IsDesktop),
       (Csv $Stage),
       (Csv $script:PlannedSampleFolderName),
