@@ -206,6 +206,14 @@ function Select-RowsWithinBudget {
     $script:SelectedByTypeGroup[$r.TypeGroup]++
     $script:SelectedBytesByTypeGroup[$r.TypeGroup]+=$size
 
+    $extKey=$r.Extension.ToLowerInvariant()
+    if(-not $script:SelectedByExtension.ContainsKey($extKey)){
+      $script:SelectedByExtension[$extKey]=[UInt64]0
+      $script:SelectedBytesByExtension[$extKey]=[UInt64]0
+    }
+    $script:SelectedByExtension[$extKey]++
+    $script:SelectedBytesByExtension[$extKey]+=$size
+
     if($r.IsDesktop -eq 'True'){
       $script:SelectedDesktopFiles++
       $script:SelectedDesktopBytes+=$size
@@ -452,6 +460,8 @@ $script:SelectedByTimeBand=@{}
 $script:SelectedBytesByTimeBand=@{}
 $script:SelectedByTypeGroup=@{}
 $script:SelectedBytesByTypeGroup=@{}
+$script:SelectedByExtension=@{}
+$script:SelectedBytesByExtension=@{}
 $script:SelectedDesktopFiles=[UInt64]0
 $script:SelectedDesktopBytes=[UInt64]0
 $script:SelectedOtherFiles=[UInt64]0
@@ -577,6 +587,13 @@ foreach($group in $TypeWeights.Keys){
   $summary.Add("$group.CandidateBytes=$candidateBytes")
   $summary.Add("$group.SelectedFiles=$selectedFiles")
   $summary.Add("$group.SelectedBytes=$selectedBytes")
+}
+
+$summary.Add('')
+$summary.Add('SELECTED BY EXTENSION')
+foreach($ext in ($script:SelectedByExtension.Keys | Sort-Object)){
+  $summary.Add("$ext.Files=$($script:SelectedByExtension[$ext])")
+  $summary.Add("$ext.Bytes=$($script:SelectedBytesByExtension[$ext])")
 }
 
 $summary.Add('')
