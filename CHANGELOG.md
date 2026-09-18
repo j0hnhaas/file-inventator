@@ -4,6 +4,8 @@ This file records the development history of Recovery Audit Toolkit. The active 
 
 ## Unreleased — Recovery Audit Toolkit
 
+- Fixed a sampler reporting bug where summary-loop variables could overwrite the final console totals after the plan had already been built. The sample plan itself was unaffected.
+
 - Repositioned the project from a single file inventory script to a two-stage recovery-audit toolkit.
 - Active tools renamed to:
   - `recovery-audit-inventory.ps1`
