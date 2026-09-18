@@ -44,7 +44,7 @@ param(
 )
 
 $ErrorActionPreference='Stop'
-$ScriptVersion='1.0.2'
+$ScriptVersion='1.0.3'
 $Started=Get-Date
 
 function Format-Duration([TimeSpan]$Span) {
@@ -179,8 +179,10 @@ Write-Progress -Activity 'Recovery Audit ISO - building file-system image' -Stat
 
 $fsi=New-Object -ComObject IMAPI2FS.MsftFileSystemImage
 try{
-  # IMAPI_MEDIA_TYPE_DVDROM = 4. This supplies DVD-sized image defaults.
-  $fsi.ChooseImageDefaultsForMediaType(4)
+  # IMAPI_MEDIA_TYPE_DVDPLUSR = 6. Use a writable single-layer DVD profile;
+  # DVDROM (4) is read-only media and can be rejected by IMAPI2FS when used
+  # as the target profile for a burn image.
+  $fsi.ChooseImageDefaultsForMediaType([int]6)
 
   # FsiFileSystemUDF = 4. UDF is used to preserve long Windows file names
   # more reliably than ISO9660/Joliet-only layouts.
