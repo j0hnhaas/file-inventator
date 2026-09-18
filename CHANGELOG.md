@@ -4,6 +4,8 @@ This file records the development history of Recovery Audit Toolkit. The active 
 
 ## Unreleased — Recovery Audit Toolkit
 
+- Updated `recovery-audit-copy.ps1` to use extended-length Windows paths (`\\?\`) for directory creation, copying, verification, and cleanup so approved sample files beyond the legacy MAX_PATH limit can be handled correctly.
+
 - Added `recovery-audit-copy.ps1` as an optional controlled execution step for approved sample plans, with serial/read-only checks, no-overwrite safeguards, size verification, live progress, audit manifest, summary, and a preserved copy of the approved plan.
 - Added `recovery-audit-iso.ps1` as a separate optional command that packages a completed sample folder into a UDF ISO image using Windows IMAPI2FS, with completion checks, a DVD-sized default limit, and byte-based write progress.
 
