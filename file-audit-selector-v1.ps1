@@ -150,6 +150,8 @@ if(-not(Test-Path -LiteralPath $InventoryCsv)){throw "Inventory CSV not found: $
 $SourceRoot=Normalize-Root $SourceRoot
 $UserRoot=Normalize-Root $UserRoot
 $ExpectedSerial=$ExpectedSerial.Trim()
+$inventoryDrive=[System.IO.Path]::GetPathRoot($InventoryCsv)
+if($inventoryDrive.TrimEnd('\\').Equals($SourceRoot.TrimEnd('\\'),[System.StringComparison]::OrdinalIgnoreCase)){throw 'SAFETY ABORT: inventory/output location must not be on the source volume.'}
 if(-not $UserRoot.StartsWith($SourceRoot,[System.StringComparison]::OrdinalIgnoreCase)){throw 'UserRoot must be on SourceRoot.'}
 
 $roots=New-Object System.Collections.Generic.List[string]
