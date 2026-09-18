@@ -44,7 +44,7 @@ param(
 )
 
 $ErrorActionPreference='Stop'
-$ScriptVersion='1.0.3'
+$ScriptVersion='1.0.4'
 $Started=Get-Date
 
 function Format-Duration([TimeSpan]$Span) {
@@ -212,43 +212,30 @@ try{
     throw ("Destination has {0:N0} free bytes; at least {1:N0} are required." -f [UInt64]$drive.Free,($ImageBytes+100000000))
   }
 
-  if(-('RecoveryAuditComStream' -as [type])){
-    Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
-
-public static class RecoveryAuditComStream
-{
-    public static int Read(object comStream, byte[] buffer)
-    {
-        IStream stream = (IStream)comStream;
-        IntPtr readPtr = Marshal.AllocCoTaskMem(sizeof(int));
-        try
-        {
-            Marshal.WriteInt32(readPtr, 0);
-            stream.Read(buffer, buffer.Length, readPtr);
-            return Marshal.ReadInt32(readPtr);
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(readPtr);
-        }
-    }
-}
-'@
+  $imageStream=$result.ImageStream
+  try{
+    $comStream=[System.Runtime.InteropServices.ComTypes.IStream]$imageStream
+  }
+  catch{
+    throw "Could not expose IMAPI ImageStream as System.Runtime.InteropServices.ComTypes.IStream: $($_.Exception.Message)"
   }
 
-  $imageStream=$result.ImageStream
+  if($null -eq $comStream){
+    throw 'Could not expose IMAPI ImageStream as System.Runtime.InteropServices.ComTypes.IStream.'
+  }
+
   $outStream=New-Object System.IO.FileStream($IsoPath,[System.IO.FileMode]::CreateNew,[System.IO.FileAccess]::Write,[System.IO.FileShare]::None,1048576)
   $buffer=New-Object byte[] 1048576
+  $readPtr=[System.Runtime.InteropServices.Marshal]::AllocCoTaskMem(4)
   [UInt64]$Written=0
   $writeStarted=Get-Date
   $lastUi=[datetime]::MinValue
 
   try{
     while($true){
-      $read=[RecoveryAuditComStream]::Read($imageStream,$buffer)
+      [System.Runtime.InteropServices.Marshal]::WriteInt32($readPtr,0)
+      $comStream.Read($buffer,$buffer.Length,$readPtr)
+      $read=[System.Runtime.InteropServices.Marshal]::ReadInt32($readPtr)
       if($read -le 0){break}
 
       $outStream.Write($buffer,0,$read)
@@ -276,6 +263,9 @@ public static class RecoveryAuditComStream
   }
   finally{
     $outStream.Dispose()
+    if($readPtr -ne [IntPtr]::Zero){
+      [System.Runtime.InteropServices.Marshal]::FreeCoTaskMem($readPtr)
+    }
     Write-Progress -Activity 'Recovery Audit ISO - writing image' -Completed
   }
 
