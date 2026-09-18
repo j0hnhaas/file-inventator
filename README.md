@@ -64,6 +64,7 @@ The master CSV contains:
 ```text
 FileID
 SourceID
+RobocopyClass
 FullPath
 RelativePath
 RelativeDirectory
@@ -112,6 +113,32 @@ Get-Disk | Format-Table Number,FriendlyName,SerialNumber,Size,IsOffline,IsReadOn
 ```
 
 Confirm that the intended source disk reports `IsReadOnly = True` before starting.
+
+
+## Audit sample planner
+
+`file-audit-selector-v1.ps1` builds a size-limited sample plan from a large inventory CSV without loading the complete inventory into memory.
+
+The planner is designed for read-only analysis. It requires the mounted source disk to match the serial number supplied at runtime and to report `IsReadOnly = True`. The disk state is checked before the run, periodically during the inventory scan, before plan construction, and again at the end.
+
+The planner prioritizes user-created formats, Desktop files and Desktop subdirectories, files close to a documented failure event, the preceding four months, and a smaller historical control sample. Oversize files, zero-byte files, intervention-window files, and post-intervention files are written to separate review lists.
+
+The default automatic sample budget is 3.9 billion bytes. Planning mode does not copy source files.
+
+Example:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File ".\file-audit-selector-v1.ps1" `
+  -InventoryCsv ".\file-inventator-v1_master.csv" `
+  -SourceRoot "X:\" `
+  -ExpectedSerial "<SERIAL_NUMBER>" `
+  -UserRoot "X:\Users\PROFILE\" `
+  -FirstDocumentedFailureTime "2026-07-26 20:32:24" `
+  -InterventionEndTime "2026-07-27 04:00:00" `
+  -PlannedSampleFolderName "!AnalyseSampleRecovery"
+```
+
+The main outputs are `sample-plan.csv`, `sample-summary.txt`, `oversize-candidates.csv`, `intervention-window.csv`, `after-intervention-review.csv`, and `zero-byte-candidates.csv`.
 
 ## Excel note
 
