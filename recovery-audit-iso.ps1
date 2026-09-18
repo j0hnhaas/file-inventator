@@ -44,7 +44,7 @@ param(
 )
 
 $ErrorActionPreference='Stop'
-$ScriptVersion='1.0.4'
+$ScriptVersion='1.0.5'
 $Started=Get-Date
 
 function Format-Duration([TimeSpan]$Span) {
@@ -213,29 +213,68 @@ try{
   }
 
   $imageStream=$result.ImageStream
-  try{
-    $comStream=[System.Runtime.InteropServices.ComTypes.IStream]$imageStream
-  }
-  catch{
-    throw "Could not expose IMAPI ImageStream as System.Runtime.InteropServices.ComTypes.IStream: $($_.Exception.Message)"
+
+  # PowerShell cannot reliably cast the IMAPI System.__ComObject wrapper to
+  # ComTypes.IStream even though the underlying COM object implements IStream.
+  # Compile a tiny CLR bridge that performs the interface cast inside C#.
+  $bridgeTypes=Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+
+namespace RecoveryAudit
+{
+    public static class IStreamBridge
+    {
+        public static int Read(object comObject, byte[] buffer)
+        {
+            IStream stream = comObject as IStream;
+            if (stream == null)
+                throw new InvalidCastException("IMAPI ImageStream does not expose IStream to the CLR bridge.");
+
+            IntPtr readPtr = Marshal.AllocCoTaskMem(sizeof(int));
+            try
+            {
+                Marshal.WriteInt32(readPtr, 0);
+                stream.Read(buffer, buffer.Length, readPtr);
+                return Marshal.ReadInt32(readPtr);
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(readPtr);
+            }
+        }
+    }
+}
+'@ -PassThru -ErrorAction Stop
+
+  $bridgeType=$bridgeTypes | Where-Object {$_.FullName -eq 'RecoveryAudit.IStreamBridge'} | Select-Object -First 1
+  if($null -eq $bridgeType){
+    throw 'Could not compile the CLR IStream bridge.'
   }
 
-  if($null -eq $comStream){
-    throw 'Could not expose IMAPI ImageStream as System.Runtime.InteropServices.ComTypes.IStream.'
+  $readMethod=$bridgeType.GetMethod('Read',[System.Reflection.BindingFlags]'Public,Static')
+  if($null -eq $readMethod){
+    throw 'Could not resolve the CLR IStream bridge Read method.'
   }
 
   $outStream=New-Object System.IO.FileStream($IsoPath,[System.IO.FileMode]::CreateNew,[System.IO.FileAccess]::Write,[System.IO.FileShare]::None,1048576)
   $buffer=New-Object byte[] 1048576
-  $readPtr=[System.Runtime.InteropServices.Marshal]::AllocCoTaskMem(4)
   [UInt64]$Written=0
   $writeStarted=Get-Date
   $lastUi=[datetime]::MinValue
 
   try{
     while($true){
-      [System.Runtime.InteropServices.Marshal]::WriteInt32($readPtr,0)
-      $comStream.Read($buffer,$buffer.Length,$readPtr)
-      $read=[System.Runtime.InteropServices.Marshal]::ReadInt32($readPtr)
+      try{
+        $read=[int]$readMethod.Invoke($null,[object[]]@($imageStream,$buffer))
+      }
+      catch{
+        $inner=$_.Exception.InnerException
+        if($null -ne $inner){throw "IMAPI IStream read failed: $($inner.Message)"}
+        throw
+      }
+
       if($read -le 0){break}
 
       $outStream.Write($buffer,0,$read)
@@ -263,9 +302,6 @@ try{
   }
   finally{
     $outStream.Dispose()
-    if($readPtr -ne [IntPtr]::Zero){
-      [System.Runtime.InteropServices.Marshal]::FreeCoTaskMem($readPtr)
-    }
     Write-Progress -Activity 'Recovery Audit ISO - writing image' -Completed
   }
 
