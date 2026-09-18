@@ -633,7 +633,7 @@ catch{
     }
   }catch{}
 
-  Write-Error "file-inventator-v1 aborted: $msg"
+  Write-Error "recovery-audit-inventory aborted: $msg"
   Write-Host "Partial output remains at: $OutputDir"
   throw
 }
@@ -1209,7 +1209,7 @@ catch{
     }
   }catch{}
 
-  Write-Error "file-inventator-v1 aborted: $msg"
+  Write-Error "recovery-audit-inventory aborted: $msg"
   Write-Host "Partial output remains at: $OutputDir"
   throw
 }
