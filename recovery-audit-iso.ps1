@@ -44,7 +44,7 @@ param(
 )
 
 $ErrorActionPreference='Stop'
-$ScriptVersion='1.0.5'
+$ScriptVersion='1.0.6'
 $Started=Get-Date
 
 function Format-Duration([TimeSpan]$Span) {
@@ -224,14 +224,19 @@ using System.Runtime.InteropServices.ComTypes;
 
 namespace RecoveryAudit
 {
-    public static class IStreamBridge
+    public sealed class IStreamReader
     {
-        public static int Read(object comObject, byte[] buffer)
+        private readonly IStream stream;
+
+        public IStreamReader(object comObject)
         {
-            IStream stream = comObject as IStream;
+            stream = comObject as IStream;
             if (stream == null)
                 throw new InvalidCastException("IMAPI ImageStream does not expose IStream to the CLR bridge.");
+        }
 
+        public int Read(byte[] buffer)
+        {
             IntPtr readPtr = Marshal.AllocCoTaskMem(sizeof(int));
             try
             {
@@ -248,14 +253,22 @@ namespace RecoveryAudit
 }
 '@ -PassThru -ErrorAction Stop
 
-  $bridgeType=$bridgeTypes | Where-Object {$_.FullName -eq 'RecoveryAudit.IStreamBridge'} | Select-Object -First 1
-  if($null -eq $bridgeType){
-    throw 'Could not compile the CLR IStream bridge.'
+  $readerType=$bridgeTypes | Where-Object {$_.FullName -eq 'RecoveryAudit.IStreamReader'} | Select-Object -First 1
+  if($null -eq $readerType){
+    throw 'Could not compile the CLR IStream reader.'
   }
 
-  $readMethod=$bridgeType.GetMethod('Read',[System.Reflection.BindingFlags]'Public,Static')
-  if($null -eq $readMethod){
-    throw 'Could not resolve the CLR IStream bridge Read method.'
+  try{
+    $bridgeReader=[System.Activator]::CreateInstance($readerType,[object[]]@($imageStream))
+  }
+  catch{
+    $inner=$_.Exception.InnerException
+    if($null -ne $inner){throw "Could not create CLR IStream reader: $($inner.Message)"}
+    throw
+  }
+
+  if($null -eq $bridgeReader){
+    throw 'Could not create the CLR IStream reader.'
   }
 
   $outStream=New-Object System.IO.FileStream($IsoPath,[System.IO.FileMode]::CreateNew,[System.IO.FileAccess]::Write,[System.IO.FileShare]::None,1048576)
@@ -267,12 +280,12 @@ namespace RecoveryAudit
   try{
     while($true){
       try{
-        $read=[int]$readMethod.Invoke($null,[object[]]@($imageStream,$buffer))
+        $read=[int]$bridgeReader.Read($buffer)
       }
       catch{
         $inner=$_.Exception.InnerException
         if($null -ne $inner){throw "IMAPI IStream read failed: $($inner.Message)"}
-        throw
+        throw "IMAPI IStream read failed: $($_.Exception.Message)"
       }
 
       if($read -le 0){break}
