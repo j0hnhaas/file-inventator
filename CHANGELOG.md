@@ -4,6 +4,8 @@ This file records the development history of Recovery Audit Toolkit. The active 
 
 ## Unreleased — Recovery Audit Toolkit
 
+- Updated `recovery-audit-iso.ps1` to use extended-length Windows paths during recursive source scanning and IMAPI2FS staging, avoiding legacy MAX_PATH failures in copied samples with deeply nested paths.
+
 - Added targeted retry/reconciliation mode to `recovery-audit-copy.ps1`. `-RetryFailed` verifies previously failed rows using extended-length paths, accepts already copied files when byte size matches the approved plan, retries only genuinely missing files, and writes a separate retry manifest plus reconciled summary.
 - Updated `recovery-audit-iso.ps1` to prefer `copy-summary-reconciled.txt` when present so ISO creation can proceed after a successful retry without overwriting the original copy audit files.
 
