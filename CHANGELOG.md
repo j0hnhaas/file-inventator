@@ -4,6 +4,9 @@ This file records the development history of Recovery Audit Toolkit. The active 
 
 ## Unreleased — Recovery Audit Toolkit
 
+- Added `recovery-audit-copy.ps1` as an optional controlled execution step for approved sample plans, with serial/read-only checks, no-overwrite safeguards, size verification, live progress, audit manifest, summary, and a preserved copy of the approved plan.
+- Added `recovery-audit-iso.ps1` as a separate optional command that packages a completed sample folder into a UDF ISO image using Windows IMAPI2FS, with completion checks, a DVD-sized default limit, and byte-based write progress.
+
 - Fixed a sampler reporting bug where summary-loop variables could overwrite the final console totals after the plan had already been built. The sample plan itself was unaffected.
 
 - Repositioned the project from a single file inventory script to a two-stage recovery-audit toolkit.
