@@ -63,7 +63,7 @@
   Files above OversizeThresholdBytes are listed separately for manual review.
 
 .EXAMPLE
-  powershell.exe -ExecutionPolicy Bypass -File ".\recovery-audit-sampler.ps1" -InventoryCsv ".\file-inventator-v1_master.csv" -SourceRoot "X:\" -ExpectedSerial "SERIAL_NUMBER" -UserRoot "X:\Users\PROFILE\" -FirstDocumentedFailureTime "2026-07-26 20:32:24" -InterventionEndTime "2026-07-27 04:00:00" -PlannedSampleFolderName "!AnalyseSampleRecovery"
+  powershell.exe -ExecutionPolicy Bypass -File ".\recovery-audit-sampler.ps1" -InventoryCsv ".\recovery-audit-inventory_master.csv" -SourceRoot "X:\" -ExpectedSerial "SERIAL_NUMBER" -UserRoot "X:\Users\PROFILE\" -FirstDocumentedFailureTime "2026-07-26 20:32:24" -InterventionEndTime "2026-07-27 04:00:00" -PlannedSampleFolderName "!AnalyseSampleRecovery"
 #>
 
 [CmdletBinding()]
