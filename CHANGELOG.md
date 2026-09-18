@@ -4,6 +4,8 @@ This file records the development history of Recovery Audit Toolkit. The active 
 
 ## Unreleased — Recovery Audit Toolkit
 
+- Updated `recovery-audit-iso.ps1` to bridge the IMAPI `ImageStream` through a tiny CLR helper before chunked writing. This avoids PowerShell's inability to directly cast the `System.__ComObject` wrapper to `ComTypes.IStream` while preserving the progress display.
+
 - Updated `recovery-audit-iso.ps1` to stream the IMAPI result through the built-in `System.Runtime.InteropServices.ComTypes.IStream` interface instead of a runtime-compiled helper type, avoiding type-resolution failures during ISO writing.
 
 - Updated `recovery-audit-iso.ps1` to use the writable DVD+R IMAPI media profile for image defaults instead of the read-only DVD-ROM profile, which can be rejected as an invalid target media type.
