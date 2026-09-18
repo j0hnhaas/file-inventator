@@ -29,8 +29,17 @@
 
   The script calculates no source-file hashes.
 
+  With -RetryFailed, the script reuses an existing destination, verifies rows
+  previously marked FAILED, accepts already-copied files when their size
+  matches the approved plan, and retries only files still missing. It writes
+  a separate retry manifest and reconciled summary; the original manifest is
+  not overwritten.
+
 .EXAMPLE
   powershell.exe -ExecutionPolicy Bypass -File ".\recovery-audit-copy.ps1" -SamplePlan ".\sample-plan.csv" -SourceRoot "X:\" -ExpectedSerial "SERIAL_NUMBER" -DestinationRoot "C:\RecoveryAuditSample" -ExpectedPlanFiles 1000 -ExpectedPlanBytes 3900000000
+
+.EXAMPLE
+  powershell.exe -ExecutionPolicy Bypass -File ".\recovery-audit-copy.ps1" -SamplePlan ".\sample-plan.csv" -SourceRoot "X:\" -ExpectedSerial "SERIAL_NUMBER" -DestinationRoot "C:\RecoveryAuditSample" -ExpectedPlanFiles 1000 -ExpectedPlanBytes 3900000000 -RetryFailed
 #>
 
 [CmdletBinding()]
@@ -56,11 +65,14 @@ param(
   [UInt64]$ExpectedPlanBytes=0,
 
   [Parameter()]
-  [UInt64]$MinimumFreeReserveBytes=100000000
+  [UInt64]$MinimumFreeReserveBytes=100000000,
+
+  [Parameter()]
+  [switch]$RetryFailed
 )
 
 $ErrorActionPreference='Stop'
-$ScriptVersion='1.0.1'
+$ScriptVersion='1.1.0'
 $RunStarted=Get-Date
 
 function Normalize-Root([string]$Path) {
@@ -325,6 +337,185 @@ if($ExpectedPlanFiles -gt 0 -and $PlanFiles -ne $ExpectedPlanFiles){
 
 if($ExpectedPlanBytes -gt 0 -and $PlanBytes -ne $ExpectedPlanBytes){
   throw "PRECHECK ABORT: plan has $PlanBytes bytes but ExpectedPlanBytes is $ExpectedPlanBytes."
+}
+
+if($RetryFailed){
+  if(-not(Test-Path -LiteralPath $DestinationRoot -PathType Container)){
+    throw "RETRY ABORT: destination does not exist: $DestinationRoot"
+  }
+
+  $ExistingManifestPath=Join-Path $DestinationRoot 'copy-manifest.csv'
+  $ApprovedPlanPath=Join-Path $DestinationRoot 'approved-sample-plan.csv'
+  $RetryManifestPath=Join-Path $DestinationRoot 'copy-retry-manifest.csv'
+  $ReconciledSummaryPath=Join-Path $DestinationRoot 'copy-summary-reconciled.txt'
+
+  if(-not(Test-Path -LiteralPath $ExistingManifestPath -PathType Leaf)){
+    throw "RETRY ABORT: original copy manifest not found: $ExistingManifestPath"
+  }
+
+  if(-not(Test-Path -LiteralPath $ApprovedPlanPath -PathType Leaf)){
+    throw "RETRY ABORT: approved plan copy not found: $ApprovedPlanPath"
+  }
+
+  $requestedHash=(Get-FileHash -LiteralPath $SamplePlan -Algorithm SHA256).Hash
+  $approvedHash=(Get-FileHash -LiteralPath $ApprovedPlanPath -Algorithm SHA256).Hash
+
+  if($requestedHash -ne $approvedHash){
+    throw 'RETRY ABORT: SamplePlan does not match approved-sample-plan.csv in the destination.'
+  }
+
+  $oldManifest=@(Import-Csv -LiteralPath $ExistingManifestPath -Delimiter ';' -Encoding UTF8)
+  if($oldManifest.Count -ne $PlanFiles){
+    throw "RETRY ABORT: original manifest has $($oldManifest.Count) rows but plan has $PlanFiles."
+  }
+
+  $failedRows=@($oldManifest | Where-Object {$_.Result -eq 'FAILED'})
+  if($failedRows.Count -eq 0){
+    Write-Host 'No FAILED rows exist in the original manifest. Nothing to retry.'
+    return
+  }
+
+  $planById=@{}
+  foreach($v in $validated){$planById[$v.FileID]=$v}
+
+  $utf8=New-Object System.Text.UTF8Encoding($true)
+  $retryWriter=New-Object System.IO.StreamWriter($RetryManifestPath,$false,$utf8,262144)
+  $retryWriter.WriteLine('PlanNo;FileID;SourcePath;DestinationPath;ExpectedSizeBytes;ObservedSizeBytes;Result;Error')
+
+  [UInt64]$RecoveredFiles=0
+  [UInt64]$RecoveredBytes=0
+  [UInt64]$RetryFailedFiles=0
+  [UInt64]$RetryFailedBytes=0
+  $lastSafety=[datetime]::MinValue
+  $retryStarted=Get-Date
+
+  Write-Host
+  Write-Host 'RECOVERY AUDIT COPY - RETRY FAILED'
+  Write-Host '=================================='
+  Write-Host ("Failed rows to reconcile : {0:N0}" -f $failedRows.Count)
+
+  try{
+    for($i=0;$i -lt $failedRows.Count;$i++){
+      $old=$failedRows[$i]
+      if(-not $planById.ContainsKey($old.FileID)){
+        throw "RETRY ABORT: FileID from original manifest is absent from approved plan: $($old.FileID)"
+      }
+
+      $r=$planById[$old.FileID]
+      $now=Get-Date
+      if(($now-$lastSafety).TotalSeconds -ge 30){
+        [void](Assert-ReadOnly $DiskNumber $ExpectedSerial)
+        $lastSafety=$now
+      }
+
+      [UInt64]$observed=0
+      $result='RETRIED_COPIED'
+      $errorText=''
+
+      try{
+        if(Test-FileExtended $r.DestinationPath){
+          $observed=Get-FileLengthExtended $r.DestinationPath
+          if($observed -ne [UInt64]$r.SizeBytes){
+            throw "EXISTING_SIZE_MISMATCH expected=$($r.SizeBytes) actual=$observed"
+          }
+          $result='VERIFIED_EXISTING'
+        }else{
+          Copy-FileNoOverwrite $r.SourcePath $r.DestinationPath
+          $observed=Get-FileLengthExtended $r.DestinationPath
+          if($observed -ne [UInt64]$r.SizeBytes){
+            throw "SIZE_MISMATCH expected=$($r.SizeBytes) actual=$observed"
+          }
+        }
+
+        $RecoveredFiles++
+        $RecoveredBytes+=[UInt64]$r.SizeBytes
+      }
+      catch{
+        $result='FAILED'
+        $errorText=$_.Exception.Message
+        $RetryFailedFiles++
+        $RetryFailedBytes+=[UInt64]$r.SizeBytes
+      }
+
+      $retryWriter.WriteLine((@(
+        (Csv $r.PlanNo),
+        (Csv $r.FileID),
+        (Csv $r.SourcePath),
+        (Csv $r.DestinationPath),
+        ([string]$r.SizeBytes),
+        ([string]$observed),
+        (Csv $result),
+        (Csv $errorText)
+      ) -join ';'))
+
+      $percent=(($i+1)/[double]$failedRows.Count)*100
+      $status=('{0:N0}/{1:N0} failed rows | recovered {2:N0} | still failed {3:N0}' -f ($i+1),$failedRows.Count,$RecoveredFiles,$RetryFailedFiles)
+      Write-Progress -Activity 'Recovery Audit Toolkit - retry failed copy rows' -Status $status -CurrentOperation $r.SourcePath -PercentComplete $percent
+    }
+  }
+  finally{
+    $retryWriter.Flush()
+    $retryWriter.Dispose()
+    Write-Progress -Activity 'Recovery Audit Toolkit - retry failed copy rows' -Completed
+  }
+
+  $diskEnd=Assert-ReadOnly $DiskNumber $ExpectedSerial
+  $originalCopied=@($oldManifest | Where-Object {$_.Result -eq 'COPIED'})
+  [UInt64]$OriginalCopiedFiles=$originalCopied.Count
+  [UInt64]$OriginalCopiedBytes=0
+  foreach($m in $originalCopied){
+    [UInt64]$b=0
+    if([UInt64]::TryParse($m.ExpectedSizeBytes,[ref]$b)){$OriginalCopiedBytes+=$b}
+  }
+
+  [UInt64]$FinalCopiedFiles=$OriginalCopiedFiles+$RecoveredFiles
+  [UInt64]$FinalCopiedBytes=$OriginalCopiedBytes+$RecoveredBytes
+  [UInt64]$FinalFailedFiles=$PlanFiles-$FinalCopiedFiles
+  [UInt64]$FinalFailedBytes=if($PlanBytes -gt $FinalCopiedBytes){$PlanBytes-$FinalCopiedBytes}else{0}
+  $finalStatus=if($FinalFailedFiles -eq 0 -and $FinalCopiedBytes -eq $PlanBytes){'COMPLETE'}else{'COMPLETE_WITH_ERRORS'}
+  $finished=Get-Date
+
+  @(
+    'RECOVERY AUDIT COPY - RECONCILED'
+    '================================'
+    "Version=$ScriptVersion"
+    "Status=$finalStatus"
+    "RetryStarted=$($retryStarted.ToString('yyyy-MM-dd HH:mm:ss'))"
+    "RetryFinished=$($finished.ToString('yyyy-MM-dd HH:mm:ss'))"
+    "SamplePlan=$SamplePlan"
+    "ApprovedPlanHashSHA256=$approvedHash"
+    "SourceRoot=$SourceRoot"
+    "DiskFriendlyName=$DiskFriendlyName"
+    "DiskReadOnlyAtStart=$DiskReadOnlyAtStart"
+    "DiskReadOnlyAtEnd=$($diskEnd.IsReadOnly)"
+    "DestinationRoot=$DestinationRoot"
+    "PlanFiles=$PlanFiles"
+    "PlanBytes=$PlanBytes"
+    "OriginalManifest=$ExistingManifestPath"
+    "OriginalFailedRows=$($failedRows.Count)"
+    "RecoveredRows=$RecoveredFiles"
+    "RetryFailedRows=$RetryFailedFiles"
+    "CopiedFiles=$FinalCopiedFiles"
+    "CopiedBytes=$FinalCopiedBytes"
+    "FailedFiles=$FinalFailedFiles"
+    "FailedBytes=$FinalFailedBytes"
+    "RetryManifest=$RetryManifestPath"
+    'SourceHashesCalculated=False'
+    'OverwriteAllowed=False'
+  ) | Set-Content -LiteralPath $ReconciledSummaryPath -Encoding UTF8
+
+  Write-Host
+  Write-Host 'RECOVERY AUDIT COPY - RETRY DONE'
+  Write-Host '================================'
+  Write-Host "Status                  : $finalStatus"
+  Write-Host ("Recovered failed rows   : {0:N0} / {1:N0}" -f $RecoveredFiles,$failedRows.Count)
+  Write-Host ("Final copied files      : {0:N0} / {1:N0}" -f $FinalCopiedFiles,$PlanFiles)
+  Write-Host ("Final copied GB         : {0:N3}" -f ([double]$FinalCopiedBytes/1000000000))
+  Write-Host ("Remaining failed files  : {0:N0}" -f $FinalFailedFiles)
+  Write-Host ("Source read-only        : {0}" -f $diskEnd.IsReadOnly)
+  Write-Host "Retry manifest          : $RetryManifestPath"
+  Write-Host "Reconciled summary      : $ReconciledSummaryPath"
+  return
 }
 
 if(Test-Path -LiteralPath $DestinationRoot){
