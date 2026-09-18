@@ -4,6 +4,9 @@ This file records the development history of Recovery Audit Toolkit. The active 
 
 ## Unreleased — Recovery Audit Toolkit
 
+- Added targeted retry/reconciliation mode to `recovery-audit-copy.ps1`. `-RetryFailed` verifies previously failed rows using extended-length paths, accepts already copied files when byte size matches the approved plan, retries only genuinely missing files, and writes a separate retry manifest plus reconciled summary.
+- Updated `recovery-audit-iso.ps1` to prefer `copy-summary-reconciled.txt` when present so ISO creation can proceed after a successful retry without overwriting the original copy audit files.
+
 - Updated `recovery-audit-copy.ps1` to use extended-length Windows paths (`\\?\`) for directory creation, copying, verification, and cleanup so approved sample files beyond the legacy MAX_PATH limit can be handled correctly.
 
 - Added `recovery-audit-copy.ps1` as an optional controlled execution step for approved sample plans, with serial/read-only checks, no-overwrite safeguards, size verification, live progress, audit manifest, summary, and a preserved copy of the approved plan.
