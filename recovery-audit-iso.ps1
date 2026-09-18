@@ -44,7 +44,7 @@ param(
 )
 
 $ErrorActionPreference='Stop'
-$ScriptVersion='1.0.0'
+$ScriptVersion='1.0.1'
 $Started=Get-Date
 
 function Format-Duration([TimeSpan]$Span) {
@@ -106,11 +106,11 @@ if(Test-Path -LiteralPath $copySummaryPath -PathType Leaf){
 
   if(-not $AllowIncompleteCopy){
     if(-not $copySummary.ContainsKey('Status') -or $copySummary['Status'] -ne 'COMPLETE'){
-      throw "PRECHECK ABORT: copy-summary.txt does not report Status=COMPLETE. Use -AllowIncompleteCopy only for deliberate exception handling."
+      throw "PRECHECK ABORT: $([System.IO.Path]::GetFileName($copySummaryPath)) does not report Status=COMPLETE. Use -AllowIncompleteCopy only for deliberate exception handling."
     }
 
     if(-not $copySummary.ContainsKey('FailedFiles') -or [UInt64]$copySummary['FailedFiles'] -ne 0){
-      throw "PRECHECK ABORT: copy-summary.txt reports failed or unknown copy count. Use -AllowIncompleteCopy only for deliberate exception handling."
+      throw "PRECHECK ABORT: $([System.IO.Path]::GetFileName($copySummaryPath)) reports failed or unknown copy count. Use -AllowIncompleteCopy only for deliberate exception handling."
     }
   }
 }
