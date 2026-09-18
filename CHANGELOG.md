@@ -4,6 +4,8 @@ This file records the development history of Recovery Audit Toolkit. The active 
 
 ## Unreleased — Recovery Audit Toolkit
 
+- Updated `recovery-audit-iso.ps1` to instantiate a CLR `IStreamReader` and call its typed `Read(byte[])` method directly, avoiding PowerShell reflection wrapping the byte buffer as `PSObject` during ISO streaming.
+
 - Updated `recovery-audit-iso.ps1` to bridge the IMAPI `ImageStream` through a tiny CLR helper before chunked writing. This avoids PowerShell's inability to directly cast the `System.__ComObject` wrapper to `ComTypes.IStream` while preserving the progress display.
 
 - Updated `recovery-audit-iso.ps1` to stream the IMAPI result through the built-in `System.Runtime.InteropServices.ComTypes.IStream` interface instead of a runtime-compiled helper type, avoiding type-resolution failures during ISO writing.
