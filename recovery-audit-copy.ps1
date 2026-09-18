@@ -60,7 +60,7 @@ param(
 )
 
 $ErrorActionPreference='Stop'
-$ScriptVersion='1.0.0'
+$ScriptVersion='1.0.1'
 $RunStarted=Get-Date
 
 function Normalize-Root([string]$Path) {
@@ -114,6 +114,33 @@ function Assert-ReadOnly([int]$DiskNumber,[string]$Serial) {
   return $disk
 }
 
+function Convert-ToExtendedPath([string]$Path) {
+  $full=[System.IO.Path]::GetFullPath($Path)
+  if($full.StartsWith('\\?\')){return $full}
+  if($full.StartsWith('\\')){
+    return '\\?\UNC\'+$full.Substring(2)
+  }
+  return '\\?\'+$full
+}
+
+function Test-FileExtended([string]$Path) {
+  return [System.IO.File]::Exists((Convert-ToExtendedPath $Path))
+}
+
+function Get-FileLengthExtended([string]$Path) {
+  $extended=Convert-ToExtendedPath $Path
+  $stream=New-Object System.IO.FileStream($extended,[System.IO.FileMode]::Open,[System.IO.FileAccess]::Read,[System.IO.FileShare]::ReadWrite)
+  try{return [UInt64]$stream.Length}
+  finally{$stream.Dispose()}
+}
+
+function Remove-FileExtended([string]$Path) {
+  $extended=Convert-ToExtendedPath $Path
+  if([System.IO.File]::Exists($extended)){
+    [System.IO.File]::Delete($extended)
+  }
+}
+
 function Get-CanonicalDestination([string]$Root,[string]$RelativePath) {
   if([string]::IsNullOrWhiteSpace($RelativePath)){
     throw 'RelativePath is empty.'
@@ -133,23 +160,27 @@ function Copy-FileNoOverwrite([string]$Source,[string]$Destination) {
   $parent=[System.IO.Path]::GetDirectoryName($Destination)
   if([string]::IsNullOrWhiteSpace($parent)){throw "Could not resolve destination directory: $Destination"}
 
-  if(-not [System.IO.Directory]::Exists($parent)){
-    [void][System.IO.Directory]::CreateDirectory($parent)
+  $sourceExtended=Convert-ToExtendedPath $Source
+  $destinationExtended=Convert-ToExtendedPath $Destination
+  $parentExtended=Convert-ToExtendedPath $parent
+
+  if(-not [System.IO.Directory]::Exists($parentExtended)){
+    [void][System.IO.Directory]::CreateDirectory($parentExtended)
   }
 
-  if([System.IO.File]::Exists($Destination)){
+  if([System.IO.File]::Exists($destinationExtended)){
     throw "Destination already exists: $Destination"
   }
 
   try{
-    [System.IO.File]::Copy($Source,$Destination,$false)
+    [System.IO.File]::Copy($sourceExtended,$destinationExtended,$false)
     return
   }
   catch{
     $firstError=$_.Exception.Message
 
-    if([System.IO.File]::Exists($Destination)){
-      try{[System.IO.File]::Delete($Destination)}catch{}
+    if([System.IO.File]::Exists($destinationExtended)){
+      try{[System.IO.File]::Delete($destinationExtended)}catch{}
     }
 
     $sourceDir=[System.IO.Path]::GetDirectoryName($Source)
@@ -167,9 +198,9 @@ function Copy-FileNoOverwrite([string]$Source,[string]$Destination) {
     & $robo $sourceDir $parent $fileName '/B' '/COPY:DAT' '/DCOPY:T' '/R:0' '/W:0' '/NP' '/NFL' '/NDL' '/NJH' '/NJS' | Out-Null
     $exit=[int]$LASTEXITCODE
 
-    if($exit -ge 8 -or -not [System.IO.File]::Exists($Destination)){
-      if([System.IO.File]::Exists($Destination)){
-        try{[System.IO.File]::Delete($Destination)}catch{}
+    if($exit -ge 8 -or -not [System.IO.File]::Exists($destinationExtended)){
+      if([System.IO.File]::Exists($destinationExtended)){
+        try{[System.IO.File]::Delete($destinationExtended)}catch{}
       }
       throw "Copy failed. Primary error: $firstError; Robocopy exit code: $exit"
     }
@@ -373,8 +404,7 @@ try{
     try{
       Copy-FileNoOverwrite $r.SourcePath $r.DestinationPath
 
-      $destInfo=Get-Item -LiteralPath $r.DestinationPath -Force -ErrorAction Stop
-      $copiedSize=[UInt64]$destInfo.Length
+      $copiedSize=Get-FileLengthExtended $r.DestinationPath
 
       if($copiedSize -ne [UInt64]$r.SizeBytes){
         throw "SIZE_MISMATCH expected=$($r.SizeBytes) actual=$copiedSize"
@@ -389,9 +419,7 @@ try{
       $FailedFiles++
       $FailedBytes+=[UInt64]$r.SizeBytes
 
-      if(Test-Path -LiteralPath $r.DestinationPath -PathType Leaf){
-        try{Remove-Item -LiteralPath $r.DestinationPath -Force -ErrorAction Stop}catch{}
-      }
+      try{Remove-FileExtended $r.DestinationPath}catch{}
     }
 
     $ProcessedFiles++
