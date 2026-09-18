@@ -44,12 +44,27 @@ param(
 )
 
 $ErrorActionPreference='Stop'
-$ScriptVersion='1.0.1'
+$ScriptVersion='1.0.2'
 $Started=Get-Date
 
 function Format-Duration([TimeSpan]$Span) {
   $h=[int][math]::Floor($Span.TotalHours)
   return ('{0:00}:{1:00}:{2:00}' -f $h,$Span.Minutes,$Span.Seconds)
+}
+
+function Convert-ToExtendedPath([string]$Path) {
+  $full=[System.IO.Path]::GetFullPath($Path)
+  if($full.StartsWith('\\?\')){return $full}
+  if($full.StartsWith('\\')){
+    return '\\?\UNC\'+$full.Substring(2)
+  }
+  return '\\?\'+$full
+}
+
+function Get-FileLengthExtended([string]$Path) {
+  $stream=New-Object System.IO.FileStream((Convert-ToExtendedPath $Path),[System.IO.FileMode]::Open,[System.IO.FileAccess]::Read,[System.IO.FileShare]::ReadWrite)
+  try{return [UInt64]$stream.Length}
+  finally{$stream.Dispose()}
 }
 
 function Get-KeyValueFile([string]$Path) {
@@ -129,18 +144,22 @@ Write-Host
 $scanStarted=Get-Date
 $lastUi=[datetime]::MinValue
 
-$files=Get-ChildItem -LiteralPath $SourceFolder -File -Recurse -Force -ErrorAction Stop
+$extendedSource=Convert-ToExtendedPath $SourceFolder
+$files=[System.IO.Directory]::EnumerateFiles($extendedSource,'*',[System.IO.SearchOption]::AllDirectories)
 
 foreach($file in $files){
   $SourceFiles++
-  $SourceBytes+=[UInt64]$file.Length
+  $SourceBytes+=Get-FileLengthExtended $file
+
+  $displayPath=$file
+  if($displayPath.StartsWith('\\?\')){$displayPath=$displayPath.Substring(4)}
 
   $now=Get-Date
   if(($now-$lastUi).TotalMilliseconds -ge 250){
     $elapsed=$now-$scanStarted
     $rate=if($elapsed.TotalSeconds -gt 0){[double]$SourceFiles/$elapsed.TotalSeconds}else{0}
     $status=('{0:N0} files | {1:N3} GB | {2:N1} files/s' -f $SourceFiles,([double]$SourceBytes/1000000000),$rate)
-    Write-Progress -Activity 'Recovery Audit ISO - scanning source folder' -Status $status -CurrentOperation $file.FullName
+    Write-Progress -Activity 'Recovery Audit ISO - scanning source folder' -Status $status -CurrentOperation $displayPath
     $lastUi=$now
   }
 }
@@ -170,7 +189,7 @@ try{
   $fsi.StageFiles=$false
 
   # Add the contents of SourceFolder at the ISO root, not the base folder itself.
-  $fsi.Root.AddTree($SourceFolder,$false)
+  $fsi.Root.AddTree((Convert-ToExtendedPath $SourceFolder),$false)
 
   Write-Progress -Activity 'Recovery Audit ISO - building file-system image' -Status 'Finalising image layout'
 
