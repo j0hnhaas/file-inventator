@@ -1,15 +1,17 @@
 # Recovery Audit Toolkit
 
-**Recovery Audit Toolkit** is a two-stage PowerShell toolkit for evaluating a recovered, restored, or otherwise preserved Windows file system.
+**Recovery Audit Toolkit** is a PowerShell toolkit for evaluating a recovered, restored, or otherwise preserved Windows file system. Its analytical core is deliberately split into two stages: inventory and stratified sample planning.
 
 It does **not** perform data recovery itself. Its purpose is to make an existing recovery result inspectable and testable in a reproducible way.
 
-The toolkit contains exactly two active scripts:
+The toolkit has **two core analysis scripts** plus two optional execution utilities:
 
-| Stage | Script | Purpose |
+| Role | Script | Purpose |
 |---|---|---|
-| 1 | `recovery-audit-inventory.ps1` | Build a read-only, ACL-aware master inventory of the mounted source volume |
-| 2 | `recovery-audit-sampler.ps1` | Turn that inventory into a reproducible, size-limited, stratified audit sample plan |
+| Core 1 | `recovery-audit-inventory.ps1` | Build a read-only, ACL-aware master inventory of the mounted source volume |
+| Core 2 | `recovery-audit-sampler.ps1` | Turn that inventory into a reproducible, size-limited, stratified audit sample plan |
+| Optional | `recovery-audit-copy.ps1` | Copy exactly the approved sample plan to a safe destination with progress and an audit manifest |
+| Optional | `recovery-audit-iso.ps1` | Package a completed local sample folder into a UDF ISO image with its own explicit command |
 
 ## Workflow
 
@@ -41,6 +43,27 @@ Mounted Windows volume
                     v
              sample-plan.csv
              + review lists
+                    |
+                    | optional
+                    v
++--------------------------------------+
+| 3. CONTROLLED COPY                   |
+| recovery-audit-copy.ps1              |
+|                                      |
+| Copy exactly the approved plan to a  |
+| safe local destination with progress |
+| and an audit manifest.               |
++-------------------+------------------+
+                    |
+                    | optional, separate command
+                    v
++--------------------------------------+
+| 4. ISO PACKAGING                     |
+| recovery-audit-iso.ps1               |
+|                                      |
+| Package the completed sample folder  |
+| into a UDF ISO image.                |
++--------------------------------------+
 ```
 
 The separation is deliberate: the source-volume inventory can be expensive, but it only needs to be created once. Sampling strategies can then be rerun against the CSV without rescanning the source volume.
@@ -238,6 +261,61 @@ Review `sample-summary.txt` and `sample-plan.csv` before any later copy or opena
 
 ---
 
+## Optional utility — Controlled copy
+
+### Purpose
+
+`recovery-audit-copy.ps1` executes an already approved `sample-plan.csv`. It does **not** select or reprioritise files.
+
+It verifies the source-disk serial number and read-only state, rejects destination collisions and overwrites, preserves the planned relative directory structure, checks copied file lengths against the plan, and writes both `copy-manifest.csv` and `copy-summary.txt`.
+
+The copy operation includes a live progress display with:
+
+- processed files;
+- processed gigabytes;
+- percentage complete;
+- throughput;
+- estimated time remaining;
+- failed-file count;
+- current source path.
+
+The approved sample plan itself is copied into the destination as `approved-sample-plan.csv` so the copied sample remains tied to the exact plan that created it.
+
+Example:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File ".\recovery-audit-copy.ps1" `
+  -SamplePlan "<PATH_TO_SAMPLE_PLAN>" `
+  -SourceRoot "X:\" `
+  -ExpectedSerial "<SERIAL_NUMBER>" `
+  -DestinationRoot "C:\RecoveryAuditSample" `
+  -ExpectedPlanFiles 18686 `
+  -ExpectedPlanBytes 3900000000
+```
+
+---
+
+## Optional utility — ISO packaging
+
+### Purpose
+
+`recovery-audit-iso.ps1` packages an already copied sample folder into an ISO file. ISO creation is **not automatic**; it is deliberately a separate, explicit command.
+
+The utility uses the Windows Image Mastering API v2 and creates a single-session **UDF** image. It does not alter the source folder. If `copy-summary.txt` is present, it requires a completed copy with zero failed files unless the operator deliberately supplies `-AllowIncompleteCopy`.
+
+The default maximum ISO size is 4,700,000,000 bytes. The image size is checked before the ISO is written. ISO writing has its own byte-based progress display with throughput and ETA.
+
+Example:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File ".\recovery-audit-iso.ps1" `
+  -SourceFolder "C:\RecoveryAuditSample" `
+  -IsoPath "C:\RecoveryAuditSample.iso" `
+  -VolumeLabel "RECOVERY_AUDIT"
+```
+
+---
+
 ## What the toolkit does not do
 
 Recovery Audit Toolkit currently does **not**:
@@ -251,7 +329,8 @@ Recovery Audit Toolkit currently does **not**:
 - inspect unmounted/RAW partitions;
 - calculate source-file content hashes;
 - automatically prove that selected files can be opened;
-- automatically copy the planned sample from the source.
+- automatically copy the planned sample from the source without an explicit copy command;
+- automatically create an ISO without an explicit ISO command.
 
 Those functions are deliberately separate from the current read-only inventory and planning workflow.
 
@@ -265,7 +344,7 @@ Sampling is a method for selecting files to inspect. It is not, by itself, proof
 
 ## Development status
 
-The active codebase consists of the two scripts listed at the top of this README. Earlier experimental sampler versions remain available through Git history rather than as separate active tools in the repository root.
+The active codebase consists of two core analysis scripts and two optional execution utilities listed at the top of this README. Earlier experimental sampler versions remain available through Git history rather than as separate active tools in the repository root.
 
 See [CHANGELOG.md](CHANGELOG.md) for development history.
 
