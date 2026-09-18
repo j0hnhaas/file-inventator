@@ -4,7 +4,7 @@
 
 It does **not** perform data recovery itself. Its purpose is to make an existing recovery result inspectable and testable in a reproducible way.
 
-The toolkit has **two core analysis scripts** plus two optional execution utilities:
+The toolkit has **two core analysis scripts** plus three optional execution/validation utilities:
 
 | Role | Script | Purpose |
 |---|---|---|
@@ -12,6 +12,7 @@ The toolkit has **two core analysis scripts** plus two optional execution utilit
 | Core 2 | `recovery-audit-sampler.ps1` | Turn that inventory into a reproducible, size-limited, stratified audit sample plan |
 | Optional | `recovery-audit-copy.ps1` | Copy exactly the approved sample plan to a safe destination with progress and an audit manifest |
 | Optional | `recovery-audit-iso.ps1` | Package a completed local sample folder into a UDF ISO image with its own explicit command |
+| Optional | `recovery-audit-validator.ps1` | Heuristically validate exactly the approved sample files from a mounted ISO |
 
 ## Workflow
 
@@ -63,6 +64,17 @@ Mounted Windows volume
 |                                      |
 | Package the completed sample folder  |
 | into a UDF ISO image.                |
++-------------------+------------------+
+                    |
+                    | mounted read-only ISO
+                    v
++--------------------------------------+
+| 5. ISO VALIDATION                    |
+| recovery-audit-validator.ps1         |
+|                                      |
+| Verify approved files by size,       |
+| BOF/mid/EOF probes, magic bytes and  |
+| format-aware structural checks.      |
 +--------------------------------------+
 ```
 
@@ -316,6 +328,46 @@ powershell.exe -ExecutionPolicy Bypass -File ".\recovery-audit-iso.ps1" `
 
 ---
 
+## Optional utility — ISO validation
+
+### Purpose
+
+`recovery-audit-validator.ps1` validates the **mounted ISO itself**, not the original recovery volume or the intermediate copy folder.
+
+It reads `approved-sample-plan.csv` from the ISO and therefore evaluates exactly the files selected by the sampler. Before validation it requires a CD-ROM mount, the expected volume label, a completed copy summary, zero failed copy files, and agreement between plan row/byte totals and the copy summary.
+
+For every planned file it checks presence and exact byte size, then reads probes at the beginning of file, 25%, 50%, 75%, and end of file. It also checks file signatures and applies format-specific validation where feasible without external dependencies.
+
+Current structural checks include OOXML/ZIP container traversal and XML parsing, PDF header/EOF/startxref checks, image decoding for JPEG/PNG/TIFF, RIFF/WAV chunk bounds, PSD/PSB section bounds, AUP3/SQLite header/page-size checks, JSON parsing, legacy Office compound-file headers, and basic checks for AI/PostScript, RAR, MP3, AAC/M4A and text-like files. InDesign files are currently reported as `UNKNOWN` after generic readability/size checks because no dependency-free structural parser is implemented.
+
+Results are deliberately categorical rather than scored:
+
+```text
+PASS_STRONG  meaningful internal structure parsed successfully
+PASS_BASIC   size/signature/basic structure plausible
+WARN         suspicious but not conclusive
+FAIL         definite missing/truncated/unreadable/structurally invalid
+UNKNOWN      present/readable, but no reliable built-in parser implemented
+```
+
+The validator writes `validation-results.csv`, a focused `validation-review.csv` containing WARN/FAIL/UNKNOWN rows, and `validation-summary.txt` to a timestamped folder outside the ISO. It includes a live progress display with files, evaluated gigabytes, percentage, ETA, and running category counts.
+
+Example for a mounted ISO at `F:\`:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File ".\recovery-audit-validator.ps1" -IsoRoot "F:\"
+```
+
+Per-file SHA-256 calculation is optional:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File ".\recovery-audit-validator.ps1" -IsoRoot "F:\" -CalculateSHA256
+```
+
+A heuristic or structural PASS is evidence that the sampled file is present and structurally plausible. It is not a mathematical guarantee that every semantic element of the file is correct or that every application will open it successfully.
+
+---
+
 ## What the toolkit does not do
 
 Recovery Audit Toolkit currently does **not**:
@@ -328,7 +380,7 @@ Recovery Audit Toolkit currently does **not**:
 - change source ownership or ACLs;
 - inspect unmounted/RAW partitions;
 - calculate source-file content hashes;
-- automatically prove that selected files can be opened;
+- prove semantic correctness or application-level openability with certainty;
 - automatically copy the planned sample from the source without an explicit copy command;
 - automatically create an ISO without an explicit ISO command.
 
@@ -344,7 +396,7 @@ Sampling is a method for selecting files to inspect. It is not, by itself, proof
 
 ## Development status
 
-The active codebase consists of two core analysis scripts and two optional execution utilities listed at the top of this README. Earlier experimental sampler versions remain available through Git history rather than as separate active tools in the repository root.
+The active codebase consists of two core analysis scripts and three optional execution/validation utilities listed at the top of this README. Earlier experimental sampler versions remain available through Git history rather than as separate active tools in the repository root.
 
 See [CHANGELOG.md](CHANGELOG.md) for development history.
 
