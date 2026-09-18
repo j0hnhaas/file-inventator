@@ -177,6 +177,39 @@ Example:
 powershell.exe -ExecutionPolicy Bypass -File ".\file-audit-selector-v1.1.ps1" -InventoryCsv ".\file-inventator-v1_master.csv" -SourceRoot "X:\" -ExpectedSerial "<SERIAL_NUMBER>" -UserRoot "X:\Users\PROFILE\" -FirstDocumentedFailureTime "2026-07-26 20:32:24" -InterventionEndTime "2026-07-27 04:00:00" -PlannedSampleFolderName "!AnalyseSampleRecovery"
 ```
 
+
+### V1.2 global creative-priority sampling
+
+`file-audit-selector-v1.2.ps1` keeps the same 14 mutually exclusive time strata as V1.1 but adds global type targets across the complete 3.9-billion-byte sample.
+
+Global target shares:
+
+```text
+CREATIVE_NATIVE   35%
+OFFICE_AUTHORING  20%
+MEDIA             20%
+PDF               12%
+DATA_CODE          7%
+TEXT_MARKUP        5%
+ARCHIVE            1%
+```
+
+Selection uses three planning phases:
+
+1. **Time-by-type matrix** – each of the 14 time strata first receives its proportional type reservations, preserving coverage across the full five-year period.
+2. **Global type top-up** – remaining candidates are added until the global type targets are approached, with native creative files topped up first.
+3. **Final priority fill** – remaining capacity is filled in creative-first type order.
+
+Across time strata, newer files are preferred. Within the same time stratum and type group, Desktop files are preferred before other personal files, then newer timestamps are preferred.
+
+The source-disk serial and read-only state are checked before scanning, periodically during the inventory pass, during plan construction, and at the end. V1.2 remains planning-only: no source file is copied or opened.
+
+Example:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File ".\file-audit-selector-v1.2.ps1" -InventoryCsv ".\file-inventator-v1_master.csv" -SourceRoot "X:\" -ExpectedSerial "<SERIAL_NUMBER>" -UserRoot "X:\Users\PROFILE\" -FirstDocumentedFailureTime "2026-07-26 20:32:24" -InterventionEndTime "2026-07-27 04:00:00" -PlannedSampleFolderName "!AnalyseSampleRecovery"
+```
+
 ## Excel note
 
 A single Excel worksheet can display at most 1,048,576 rows. The CSV can contain more rows; use PowerShell, Python, a database, or split analysis files when the inventory is larger.
