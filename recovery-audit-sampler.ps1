@@ -619,15 +619,15 @@ $summary.Add('TIME BAND BUDGETS AND RESULTS')
 foreach($band in $TimeBands){
   $candidateFiles=if($CandidateFilesByTimeBand.ContainsKey($band)){$CandidateFilesByTimeBand[$band]}else{0}
   $candidateBytes=if($CandidateBytesByTimeBand.ContainsKey($band)){$CandidateBytesByTimeBand[$band]}else{0}
-  $selectedFiles=if($script:SelectedByTimeBand.ContainsKey($band)){$script:SelectedByTimeBand[$band]}else{0}
-  $selectedBytes=if($script:SelectedBytesByTimeBand.ContainsKey($band)){$script:SelectedBytesByTimeBand[$band]}else{0}
+  $bandSelectedFiles=if($script:SelectedByTimeBand.ContainsKey($band)){$script:SelectedByTimeBand[$band]}else{0}
+  $bandSelectedBytes=if($script:SelectedBytesByTimeBand.ContainsKey($band)){$script:SelectedBytesByTimeBand[$band]}else{0}
 
   $summary.Add("$band.WeightPercent=$($TimeWeights[$band])")
   $summary.Add("$band.NominalBudgetBytes=$($TimeBudgetBytes[$band])")
   $summary.Add("$band.CandidateFiles=$candidateFiles")
   $summary.Add("$band.CandidateBytes=$candidateBytes")
-  $summary.Add("$band.SelectedFiles=$selectedFiles")
-  $summary.Add("$band.SelectedBytes=$selectedBytes")
+  $summary.Add("$band.SelectedFiles=$bandSelectedFiles")
+  $summary.Add("$band.SelectedBytes=$bandSelectedBytes")
 }
 
 $summary.Add('')
@@ -636,16 +636,16 @@ $summary.Add('GLOBAL TYPE TARGETS AND RESULTS')
 foreach($group in $TypeWeights.Keys){
   $candidateFiles=if($CandidateFilesByTypeGroup.ContainsKey($group)){$CandidateFilesByTypeGroup[$group]}else{0}
   $candidateBytes=if($CandidateBytesByTypeGroup.ContainsKey($group)){$CandidateBytesByTypeGroup[$group]}else{0}
-  $selectedFiles=if($script:SelectedByTypeGroup.ContainsKey($group)){$script:SelectedByTypeGroup[$group]}else{0}
-  $selectedBytes=if($script:SelectedBytesByTypeGroup.ContainsKey($group)){$script:SelectedBytesByTypeGroup[$group]}else{0}
+  $groupSelectedFiles=if($script:SelectedByTypeGroup.ContainsKey($group)){$script:SelectedByTypeGroup[$group]}else{0}
+  $groupSelectedBytes=if($script:SelectedBytesByTypeGroup.ContainsKey($group)){$script:SelectedBytesByTypeGroup[$group]}else{0}
 
-  $actualPercent=if($MaxSampleBytes -gt 0){[math]::Round(([double]$selectedBytes/[double]$MaxSampleBytes)*100,2)}else{0}
+  $actualPercent=if($MaxSampleBytes -gt 0){[math]::Round(([double]$groupSelectedBytes/[double]$MaxSampleBytes)*100,2)}else{0}
   $summary.Add("$group.TargetPercent=$($TypeWeights[$group])")
   $summary.Add("$group.TargetBytes=$($GlobalTypeTargetBytes[$group])")
   $summary.Add("$group.CandidateFiles=$candidateFiles")
   $summary.Add("$group.CandidateBytes=$candidateBytes")
-  $summary.Add("$group.SelectedFiles=$selectedFiles")
-  $summary.Add("$group.SelectedBytes=$selectedBytes")
+  $summary.Add("$group.SelectedFiles=$groupSelectedFiles")
+  $summary.Add("$group.SelectedBytes=$groupSelectedBytes")
   $summary.Add("$group.ActualPercentOfMax=$actualPercent")
 }
 
