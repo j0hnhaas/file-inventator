@@ -119,7 +119,7 @@ function Get-CanonicalDestination([string]$Root,[string]$RelativePath) {
     throw 'RelativePath is empty.'
   }
 
-  $rel=$RelativePath.TrimStart('\','/')
+  $rel=$RelativePath.TrimStart([char[]]@('\','/'))
   $candidate=[System.IO.Path]::GetFullPath((Join-Path $Root $rel))
 
   if(-not $candidate.StartsWith($Root,[System.StringComparison]::OrdinalIgnoreCase)){
@@ -141,7 +141,39 @@ function Copy-FileNoOverwrite([string]$Source,[string]$Destination) {
     throw "Destination already exists: $Destination"
   }
 
-  [System.IO.File]::Copy($Source,$Destination,$false)
+  try{
+    [System.IO.File]::Copy($Source,$Destination,$false)
+    return
+  }
+  catch{
+    $firstError=$_.Exception.Message
+
+    if([System.IO.File]::Exists($Destination)){
+      try{[System.IO.File]::Delete($Destination)}catch{}
+    }
+
+    $sourceDir=[System.IO.Path]::GetDirectoryName($Source)
+    $fileName=[System.IO.Path]::GetFileName($Source)
+
+    if([string]::IsNullOrWhiteSpace($sourceDir) -or [string]::IsNullOrWhiteSpace($fileName)){
+      throw "Primary copy failed and Robocopy fallback could not resolve source path. Primary error: $firstError"
+    }
+
+    $robo=Join-Path $env:SystemRoot 'System32\robocopy.exe'
+    if(-not(Test-Path -LiteralPath $robo)){
+      throw "Primary copy failed and Robocopy is unavailable. Primary error: $firstError"
+    }
+
+    & $robo $sourceDir $parent $fileName '/B' '/COPY:DAT' '/DCOPY:T' '/R:0' '/W:0' '/NP' '/NFL' '/NDL' '/NJH' '/NJS' | Out-Null
+    $exit=[int]$LASTEXITCODE
+
+    if($exit -ge 8 -or -not [System.IO.File]::Exists($Destination)){
+      if([System.IO.File]::Exists($Destination)){
+        try{[System.IO.File]::Delete($Destination)}catch{}
+      }
+      throw "Copy failed. Primary error: $firstError; Robocopy exit code: $exit"
+    }
+  }
 }
 
 $SamplePlan=[System.IO.Path]::GetFullPath($SamplePlan)
@@ -285,6 +317,12 @@ $ManifestPath=Join-Path $DestinationRoot 'copy-manifest.csv'
 $SummaryPath=Join-Path $DestinationRoot 'copy-summary.txt'
 $InProgressPath=Join-Path $DestinationRoot 'COPY_IN_PROGRESS.txt'
 
+foreach($reserved in @($ManifestPath,$SummaryPath,$InProgressPath)){
+  if($destSet.Contains($reserved)){
+    throw "PRECHECK ABORT: planned sample collides with toolkit metadata path: $reserved"
+  }
+}
+
 @(
   'RECOVERY AUDIT COPY IN PROGRESS'
   "Started=$($RunStarted.ToString('yyyy-MM-dd HH:mm:ss'))"
@@ -394,8 +432,8 @@ try{
 
       $status=('{0:N0}/{1:N0} files | {2:N3}/{3:N3} GB | {4:N1}% | {5:N1} MB/s | ETA {6} | failed {7:N0}' -f $ProcessedFiles,$PlanFiles,([double]$ProcessedBytes/1000000000),([double]$PlanBytes/1000000000),$percent,($rate/1000000),(Format-Duration $eta),$FailedFiles)
 
-      Write-Progress -Activity 'Recovery Audit Toolkit - controlled copy' -Status $status -CurrentOperation $show -PercentComplete ([math]::Max(0,[math]::Min(100,$percent))
-      )
+      $progressPercent=[math]::Max(0,[math]::Min(100,$percent))
+      Write-Progress -Activity 'Recovery Audit Toolkit - controlled copy' -Status $status -CurrentOperation $show -PercentComplete $progressPercent
 
       $lastUi=$now
     }
