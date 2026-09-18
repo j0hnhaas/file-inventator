@@ -78,14 +78,14 @@ PathLength
 IsZeroByte
 ```
 
-File IDs are simple sequential identifiers such as `F000000001`. V1 deliberately does not calculate SHA-256 hashes of source files.
+File IDs are simple sequential identifiers such as `F000000001`. `RobocopyClass` preserves Robocopy's per-file classification, including skipped entries shown by verbose mode. V1 deliberately does not calculate SHA-256 hashes of source files.
 
 ## How it works
 
 The run has three phases:
 
 1. **Pre-count** – Robocopy enumerates the source in list-only backup mode and determines the expected total number of files and bytes.
-2. **Raw listing** – a Unicode Robocopy listing is created. The script displays file-count progress, byte progress, throughput, ETA, and the current path.
+2. **Raw listing** – a Unicode Robocopy listing is created with verbose output so skipped files are included as inventory records. The script displays file-count progress, byte progress, throughput, ETA, and the current path.
 3. **CSV + validation** – the raw listing is parsed into the master CSV. Counts and byte totals are compared between the pre-count, the full Robocopy run, and the CSV.
 
 A successful run ends with:
