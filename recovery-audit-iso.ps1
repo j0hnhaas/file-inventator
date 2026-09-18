@@ -94,7 +94,13 @@ if($IsoPath.StartsWith($sourcePrefix,[System.StringComparison]::OrdinalIgnoreCas
   throw 'SAFETY ABORT: ISO output must not be created inside SourceFolder.'
 }
 
-$copySummaryPath=Join-Path $SourceFolder 'copy-summary.txt'
+$reconciledSummaryPath=Join-Path $SourceFolder 'copy-summary-reconciled.txt'
+$copySummaryPath=if(Test-Path -LiteralPath $reconciledSummaryPath -PathType Leaf){
+  $reconciledSummaryPath
+}else{
+  Join-Path $SourceFolder 'copy-summary.txt'
+}
+
 if(Test-Path -LiteralPath $copySummaryPath -PathType Leaf){
   $copySummary=Get-KeyValueFile $copySummaryPath
 
